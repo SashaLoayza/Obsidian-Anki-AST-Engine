@@ -159,7 +159,7 @@ export function createCardPreviewBadgeElement(
 	card: ResolvedCard,
 	onMoreAction?: () => void,
 ): HTMLElement {
-	const slot = activeDocument.createSpan({ cls: BADGE_SLOT_CLASS });
+	const slot = createSpan({ cls: BADGE_SLOT_CLASS });
 
 	const badgeModel = buildHeadingBadgeModel(card);
 	const tooltip = formatCardPreviewTooltip(card);

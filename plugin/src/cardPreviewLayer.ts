@@ -54,7 +54,7 @@ export class CardEnvelopeMarker implements LayerMarker {
 	}
 
 	draw(): HTMLElement {
-		const elt = activeDocument.createDiv({
+		const elt = createDiv({
 			cls: `anki-card-envelope anki-card-envelope--${this.outcome}`,
 		});
 		if (this.headingStyle !== 'off' && this.headingHeight > 0) {

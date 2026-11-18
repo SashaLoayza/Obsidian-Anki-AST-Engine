@@ -1,3 +1,3 @@
 export function toAnkiMediaFileName(vaultBaseName: string): string {
-  return vaultBaseName.replace(/\s+/g, "_");
+  return vaultBaseName.replace(/\s+/g, "_").toLowerCase();
 }
