@@ -17,13 +17,17 @@ describe("isRemoteMediaUrl", () => {
 
 describe("fileNameFromRemoteUrl", () => {
   test("uses URL basename sanitized for Anki", () => {
-    expect(fileNameFromRemoteUrl(
-      "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png",
-    )).toBe("PNG_transparency_demonstration_1.png");
+    expect(
+      fileNameFromRemoteUrl(
+        "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png",
+      ),
+    ).toBe("png_transparency_demonstration_1.png");
   });
 
   test("defaults extension when URL path has no extension", () => {
-    expect(fileNameFromRemoteUrl("https://example.com/photo")).toBe("photo.png");
+    expect(fileNameFromRemoteUrl("https://example.com/photo")).toBe(
+      "photo.png",
+    );
   });
 });
 

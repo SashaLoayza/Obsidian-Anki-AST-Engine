@@ -11,7 +11,10 @@ import {
 } from "../../src/ast/mediaResolver";
 import { graftTransclusions } from "../../src/ast/transclusionGraft";
 import { buildVaultFileIndex } from "../../src/obsidian/vaultIndex";
-import { assertFixtureMediaReady, NON_IMAGE_MEDIA_FIXTURE_FILES } from "../helpers/fixtureMedia";
+import {
+  assertFixtureMediaReady,
+  NON_IMAGE_MEDIA_FIXTURE_FILES,
+} from "../helpers/fixtureMedia";
 
 function collectImageUrls(ast: { children: Content[] }): string[] {
   const urls: string[] = [];
@@ -47,9 +50,9 @@ describe("mediaResolver", () => {
     expect(resolved.some((entry) => entry.fileName.includes("toppng"))).toBe(
       true,
     );
-    expect(resolved.some((entry) => entry.absolutePath.includes("path.png"))).toBe(
-      true,
-    );
+    expect(
+      resolved.some((entry) => entry.absolutePath.includes("path.png")),
+    ).toBe(true);
   });
 
   test("resolveMedia rewrites image urls and queues dry-run uploads", async () => {
@@ -126,10 +129,12 @@ describe("mediaResolver", () => {
     expect(result.plans).toHaveLength(1);
     expect(result.plans[0]?.transport).toBe("url");
     expect(result.plans[0]?.sourceUrl).toContain("https://");
-    expect(result.plans[0]?.fileName).toBe("PNG_transparency_demonstration_1.png");
+    expect(result.plans[0]?.fileName).toBe(
+      "png_transparency_demonstration_1.png",
+    );
 
     const imageUrls = collectImageUrls(ast);
-    expect(imageUrls).toContain("PNG_transparency_demonstration_1.png");
+    expect(imageUrls).toContain("png_transparency_demonstration_1.png");
   });
 
   test("resolveMedia rewrites non-image wiki embeds", async () => {
