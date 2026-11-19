@@ -5,6 +5,43 @@ import { buildClozeTokenDecorations, buildHeadingBadgeModel } from '../../plugin
 import { isCardDeclarationHeadingLine } from '../../plugin/src/cardPreviewEditor';
 
 describe('User Reported Issues Regression Suite', () => {
+	test('Issue 10 (Inline-Delimiter-01): Inline code before ::: and bold right after keeps question tail on Front and answer on Back', () => {
+		const doc = [
+			'---',
+			'AnkiSync: on',
+			'---',
+			'',
+			'#### [REG-Inline-01] Inline code before delimiter',
+			'',
+			'How is a function `f` stored in a struct? Is it generic?',
+			':::',
+			'**Generic function** = takes `void*`, returns `void*`.',
+			'',
+			'<!--anki-id: 5c1e2a77-3b0f-4d6e-9a54-0f8d2b7c1a10-->',
+		].join('\n');
+
+		const result = parseCardDocument(doc);
+		expect(result.cards).toHaveLength(1);
+
+		const card = result.cards[0]!;
+		expect(card.outcome).toBe('sync');
+
+		const frontHtml = compileCardField(card.frontNodes);
+		const backHtml = compileCardField(card.backNodes);
+
+		// Front: full question, including the text after the inline code; no answer content.
+		expect(frontHtml).toContain('How is a function');
+		expect(frontHtml).toContain('<code>f</code>');
+		expect(frontHtml).toContain('Is it generic?');
+		expect(frontHtml).not.toContain('Generic function');
+
+		// Back: answer only; no leaked question prefix.
+		expect(backHtml).toContain('<strong>Generic function</strong>');
+		expect(backHtml).toContain('<code>void*</code>');
+		expect(backHtml).not.toContain('How is a function');
+		expect(backHtml).not.toContain('<code>f</code>');
+	});
+
 	test('Issue 1 (STRESS-Basic-03): Empty Back allowed with delimiter ::: compiles to sync and empty Back field', () => {
 		const doc = [
 			'---',

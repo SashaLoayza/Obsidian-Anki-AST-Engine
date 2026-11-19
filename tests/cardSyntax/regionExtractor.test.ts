@@ -10,6 +10,78 @@ function parseBody(markdown: string) {
   return ast.children;
 }
 
+type InlineChild = { type: string; value?: string; children?: InlineChild[] };
+
+function childrenOf(node: unknown): InlineChild[] {
+  return (node as { children: InlineChild[] }).children;
+}
+
+function childTypes(node: unknown): string[] {
+  return childrenOf(node).map((child) => child.type);
+}
+
+describe("extractCardRegions — delimiter inside a mixed-inline paragraph (regression)", () => {
+  test("inline code before ::: and bold right after: front keeps question tail, back starts at the bold", () => {
+    const body = parseBody("Q with `f` tail?\n:::\n**Bold** answer");
+    const regions = extractCardRegions(body);
+
+    expect(regions.textNodes).toHaveLength(1);
+    expect(regions.backNodes).toHaveLength(1);
+
+    const front = regions.textNodes[0]!;
+    const back = regions.backNodes[0]!;
+
+    // Front: everything before the delimiter, nothing from the answer.
+    expect(childTypes(front)).toEqual(["text", "inlineCode", "text"]);
+    expect(childrenOf(front)[2]!.value?.trim()).toBe("tail?");
+
+    // Back: nothing from the question (no stray "Q with" / `f`), starts at the bold.
+    expect(childTypes(back)).toEqual(["strong", "text"]);
+
+    expect(regions.regions.delimiters).toHaveLength(1);
+    expect(regions.regions.delimiters[0]?.kind).toBe(":::");
+  });
+
+  test("does not mutate the original parsed nodes", () => {
+    const body = parseBody("Q with `f` tail?\n:::\n**Bold** answer");
+    const before = childTypes(body[0]);
+
+    extractCardRegions(body);
+
+    expect(childTypes(body[0])).toEqual(before);
+  });
+
+  test("::: at the very start of a paragraph: empty front, back keeps inline code", () => {
+    const regions = extractCardRegions(parseBody(":::\n`code` answer"));
+
+    expect(regions.textNodes).toHaveLength(0);
+    expect(regions.backNodes).toHaveLength(1);
+    expect(childTypes(regions.backNodes[0])).toEqual(["inlineCode", "text"]);
+  });
+
+  test("::: nested inside emphasis cuts both sides of the container", () => {
+    const regions = extractCardRegions(parseBody("*a\n:::\nb* tail"));
+
+    const front = regions.textNodes[0]!;
+    const back = regions.backNodes[0]!;
+
+    expect(childTypes(front)).toEqual(["emphasis"]);
+    expect(childrenOf(childrenOf(front)[0])[0]!.value).toBe("a");
+
+    expect(childTypes(back)).toEqual(["emphasis", "text"]);
+    expect(childrenOf(childrenOf(back)[0])[0]!.value).toBe("b");
+  });
+
+  test("::: inside a single plain text node still splits as before", () => {
+    const regions = extractCardRegions(
+      parseBody("Question text\n:::\nAnswer text"),
+    );
+
+    expect(nodesToPreview(regions.textNodes)).toBe("Question text");
+    expect(nodesToPreview(regions.backNodes)).toBe("Answer text");
+  });
+});
+
 describe("extractCardRegions — DEL-01 standard :::", () => {
   test("splits Text and Back regions at standalone ::: line", () => {
     const regions = extractCardRegions(

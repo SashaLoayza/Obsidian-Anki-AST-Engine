@@ -254,9 +254,7 @@ function splitNodeAtFirstDelimiter(
 ): SplitAtDelimiterResult | null {
   let splitInfo:
     | {
-        parent: Parent;
         textNode: Text;
-        index: number;
         match: DelimiterMatch;
       }
     | undefined;
@@ -280,20 +278,8 @@ function splitNodeAtFirstDelimiter(
       return;
     }
 
-    const parent = ancestors[ancestors.length - 1] as Parent | undefined;
-    if (!parent?.children) {
-      return;
-    }
-
-    const index = parent.children.indexOf(visited);
-    if (index === -1) {
-      return;
-    }
-
     splitInfo = {
-      parent,
       textNode: visited,
-      index,
       match,
     };
   });
@@ -302,35 +288,21 @@ function splitNodeAtFirstDelimiter(
     return null;
   }
 
-  const { parent, textNode, index, match } = splitInfo;
+  const { textNode, match } = splitInfo;
   const frontText = textNode.value.slice(0, match.index).trimEnd();
   const backText = textNode.value
     .slice(match.index + match.length)
     .trimStart();
 
-  const frontClone = structuredClone(node);
-  const backClone = structuredClone(node);
-
-  const frontTextNode = findCorrespondingTextNode(frontClone, parent, index);
-  const backTextNode = findCorrespondingTextNode(backClone, parent, index);
-
-  if (!frontTextNode || !backTextNode) {
+  const path = pathToNode(node as Parent, textNode);
+  if (!path) {
     return null;
   }
 
-  if (frontText.length === 0) {
-    removeChildAtPath(frontClone, parent, index);
-  } else {
-    frontTextNode.value = frontText;
-    trimChildrenAfterIndex(frontClone, parent, index);
-  }
-
-  if (backText.length === 0) {
-    removeChildAtPath(backClone, parent, index);
-  } else {
-    backTextNode.value = backText;
-    trimChildrenBeforeIndex(backClone, parent, index);
-  }
+  const frontClone = structuredClone(node);
+  const backClone = structuredClone(node);
+  pruneToSide(frontClone as unknown as Parent, path, frontText, "front");
+  pruneToSide(backClone as unknown as Parent, path, backText, "back");
 
   const textStart = textNode.position?.start?.offset;
   const delimiter: DelimiterRegion = {
@@ -470,121 +442,54 @@ function findFirstDelimiterInText(
   return earliest;
 }
 
-function findCorrespondingTextNode(
-  root: RootContent,
-  targetParent: Parent,
-  childIndex: number,
-): Text | undefined {
-  let found: Text | undefined;
-  let parentCount = 0;
-
-  visitParents(root, (visited, ancestors) => {
-    if (found) {
-      return;
+/** Index path from `root` down to `target`, e.g. [2] or [1, 0]. */
+function pathToNode(root: Parent, target: Node): number[] | null {
+  for (let i = 0; i < root.children.length; i++) {
+    const child = root.children[i] as RootContent;
+    if (child === target) {
+      return [i];
     }
-
-    if (
-      visited.type === "text" &&
-      ancestors.length === targetParent.children.length
-    ) {
-      const immediateParent = ancestors[ancestors.length - 1] as Parent;
-      const index = immediateParent.children.indexOf(visited);
-      if (index === childIndex && parentCount === 0) {
-        found = visited;
+    if ("children" in child) {
+      const sub = pathToNode(child as Parent, target);
+      if (sub) {
+        return [i, ...sub];
       }
     }
+  }
+  return null;
+}
 
-    if (visited === root) {
-      parentCount += 1;
-    }
-  });
+/**
+ * Keep only one side of the delimiter text node.
+ * front: everything before it, plus `newText` in its place.
+ * back:  `newText`, plus everything after it.
+ * Applied at every level of the path, so nested containers are cut too.
+ */
+function pruneToSide(
+  root: Parent,
+  path: number[],
+  newText: string,
+  side: "front" | "back",
+): void {
+  let cur: Parent = root;
 
-  if (found) {
-    return found;
+  for (let d = 0; d < path.length - 1; d++) {
+    const i = path[d]!;
+    cur.children = (
+      side === "front" ? cur.children.slice(0, i + 1) : cur.children.slice(i)
+    ) as typeof cur.children;
+    cur = cur.children[side === "front" ? i : 0] as Parent;
   }
 
-  let match: Text | undefined;
-  visitParents(root, (visited, ancestors) => {
-    if (match) {
-      return;
-    }
+  const last = path[path.length - 1]!;
+  const textNode = cur.children[last] as Text;
+  const replacement = newText ? [{ ...textNode, value: newText }] : [];
 
-    if (visited.type !== "text") {
-      return;
-    }
-
-    const immediateParent = ancestors[ancestors.length - 1] as Parent | undefined;
-    if (!immediateParent) {
-      return;
-    }
-
-    const index = immediateParent.children.indexOf(visited);
-    if (index === childIndex) {
-      match = visited;
-    }
-  });
-
-  return match;
-}
-
-function trimChildrenAfterIndex(
-  root: RootContent,
-  targetParent: Parent,
-  childIndex: number,
-): void {
-  visitParents(root, (visited, ancestors) => {
-    const immediateParent = ancestors[ancestors.length - 1] as Parent | undefined;
-    if (!immediateParent || visited.type !== "text") {
-      return;
-    }
-
-    const index = immediateParent.children.indexOf(visited);
-    if (index > childIndex) {
-      const parentIndex = ancestors.length - 1;
-      const grandparent = ancestors[parentIndex - 1] as Parent | undefined;
-      if (grandparent) {
-        const parentPosition = grandparent.children.indexOf(immediateParent);
-        immediateParent.children = immediateParent.children.slice(0, childIndex + 1);
-        grandparent.children[parentPosition] = immediateParent;
-      }
-    }
-  });
-}
-
-function trimChildrenBeforeIndex(
-  root: RootContent,
-  targetParent: Parent,
-  childIndex: number,
-): void {
-  visitParents(root, (visited, ancestors) => {
-    const immediateParent = ancestors[ancestors.length - 1] as Parent | undefined;
-    if (!immediateParent || visited.type !== "text") {
-      return;
-    }
-
-    const index = immediateParent.children.indexOf(visited);
-    if (index === childIndex) {
-      immediateParent.children = immediateParent.children.slice(index);
-    }
-  });
-}
-
-function removeChildAtPath(
-  root: RootContent,
-  targetParent: Parent,
-  childIndex: number,
-): void {
-  visitParents(root, (visited, ancestors) => {
-    const immediateParent = ancestors[ancestors.length - 1] as Parent | undefined;
-    if (!immediateParent || visited.type !== "text") {
-      return;
-    }
-
-    const index = immediateParent.children.indexOf(visited);
-    if (index === childIndex) {
-      immediateParent.children.splice(index, 1);
-    }
-  });
+  cur.children = (
+    side === "front"
+      ? [...cur.children.slice(0, last), ...replacement]
+      : [...replacement, ...cur.children.slice(last + 1)]
+  ) as typeof cur.children;
 }
 
 function isEmptyNode(node: RootContent): boolean {
